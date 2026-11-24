@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 玄机 AI
 
-## Getting Started
+玄机 AI 是一个中文命理工作台。它用确定性规则计算八字、紫微斗数和周易六爻盘面，再用 DeepSeek 生成带盘面依据的反思与行动建议。
 
-First, run the development server:
+## 本地运行
+
+需要 Bun 和 Node.js。安装依赖后启动开发服务。
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun install
+bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+打开 [http://localhost:3000](http://localhost:3000)，可以直接查看示例盘，也可以填写出生资料或摇钱成卦。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Next.js 从项目根目录的 `.env.local` 读取 `DEEPSEEK_API_KEY`。默认使用 `deepseek-flash`，可用 `DEEPSEEK_MODEL` 指定其他支持 DeepSeek Responses API 的模型。密钥仅用于服务端。调用 AI 时会发送结构化盘面，以及六爻问题或追问内容。出生地点、坐标和原始钟表时间仅用于本地服务排盘。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+bun run lint
+bun x tsc --noEmit
+bun run build
+```
 
-## Learn More
+## 排盘口径
 
-To learn more about Next.js, take a look at the following resources:
+- **出生时间**通过下拉框选择年、月、日、小时和分钟，支持公历、农历和闰月。不确定时辰时，可选择时段代表时间，盘面会标示推定信息。夏令时重复小时默认采用较早时刻。
+- **出生地点**先选择时区，再填写国家或地区、省份或州和城市。省份及经纬度可以留空。
+- **真太阳时**根据所选时区、经度和均时差计算。经度留空时，盘面采用当地钟表时间。临近时辰边界时，出生时间、经度和公式近似都可能影响结果。 [NOAA 均时差近似公式](https://gml.noaa.gov/grad/solcalc/solareqns.PDF)
+- **八字**用 `lunar-javascript` 按 UTC+8 的节气时刻推算年柱和月柱，日柱和时柱按出生地真太阳时或当地钟表时间推算。晚子时日柱沿用当天，时干按子初推算。五行占比将月支藏干加倍，其他藏干按主次分配。大运图显示盘内五行对应的活跃度。
+- **紫微斗数**用 `iztro` 计算十二宫、星曜、三方四正与四化。以农历正月换年，按出生地真太阳时或当地钟表时间排盘。晚子时保留当天，闰月分前后半月处理。
+- **周易六爻**使用三枚模拟铜钱由下往上起六爻，并按动爻计算变卦。随机性来自浏览器的加密随机数，并混入按住按钮的时长。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 接口
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `GET /api/cities?q=杭州` 查询出生地点及其经纬度和时区。
+- `POST /api/chart` 计算盘面，或使用 `operation: "calendar"` 互换公历和农历。
+- `POST /api/reading` 使用 `mode: "report"` 生成 Zod 校验的结构化报告，或用 `mode: "chat"` 追问。两种模式均以 NDJSON 流返回。
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+本版本覆盖产品文档的前两阶段。账户、命盘档案、合盘与每日能量日历属于第三阶段。
