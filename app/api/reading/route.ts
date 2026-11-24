@@ -143,7 +143,10 @@ export async function POST(request: Request) {
     const result = streamText({
       ...common,
       system: system,
-      prompt: prompt + `\n可引用的盘面索引：${JSON.stringify(references)}。\n输出符合约定结构的中文 JSON。headline 为一句话概括，只作反思假设。tags 给 3 个短标签。strength、blindSpot、domains、outlook、actions 和 cautions 每条均提供 evidence 和 referenceIds。evidence 说明盘面事实如何支持这一条，referenceIds 逐字采用 1–3 个直接对应的索引 ID。先核对 ID 的标签及盘面再引用。按「${labels}」顺序输出三个 domains，outlook 解释盘面中所选流年或本卦与变卦。每条 text 用 1–3 句，写 2–3 项行动、1–3 项谨慎事项。`,
+      prompt: prompt + `\n可引用的盘面索引：${JSON.stringify(references)}。
+输出符合约定结构的中文 JSON。headline 为一句话概括，只作反思假设。tags 是包含 3 个短标签的字符串数组。
+strength、blindSpot 和 outlook 各是一个对象。domains、actions 和 cautions 各是一个 JSON 对象数组。每个对象都包含字符串 text、字符串 evidence 和字符串数组 referenceIds。domains 的对象还包含 title。
+evidence 说明盘面事实如何支持这一条，referenceIds 逐字采用 1–3 个直接对应的索引 ID。先核对 ID 的标签及盘面再引用。按「${labels}」顺序输出三个 domains，outlook 解释盘面中所选流年或本卦与变卦。每条 text 用 1–3 句，写 2–3 项行动、1–3 项谨慎事项。`,
       maxOutputTokens: 9500,
       output: Output.object({ name: "AstrolabeReading", schema: reportSchema(references.map(({ id }) => id)) }),
     });

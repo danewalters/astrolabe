@@ -53,18 +53,27 @@ export async function readEvents(payload: unknown, signal: AbortSignal, receive:
 
 type EvidenceText = { text?: string; evidence?: string; referenceIds?: (string | undefined)[] };
 
+// Streamed previews can contain values that do not match the final report schema.
+function reportList<T>(value: T[] | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function hasReportText(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
 function Evidence({ value, references, onEvidence }: {
   value?: EvidenceText;
   references?: ReadonlyMap<string, ChartReference>;
   onEvidence: (reference: ChartReference) => void;
 }) {
-  const matches = [...new Set(value?.referenceIds)].flatMap((id) => {
-    const reference = id && references?.get(id);
+  const matches = [...new Set(reportList(value?.referenceIds))].flatMap((id) => {
+    const reference = typeof id === "string" ? references?.get(id) : undefined;
     return reference ? [reference] : [];
   });
   return <>
-    {value?.text && <p>{value.text}</p>}
-    {value?.evidence && <small className="evidence">盘面依据 · {value.evidence}</small>}
+    {hasReportText(value?.text) && <p>{value.text}</p>}
+    {hasReportText(value?.evidence) && <small className="evidence">盘面依据 · {value.evidence}</small>}
     {matches.length > 0 && <div className="evidence-links" aria-label="查看盘面依据">
       {matches.map((reference) => <button type="button" key={reference.id} onClick={() => onEvidence(reference)}>
         <Compass size={13} />{reference.label}
@@ -80,6 +89,8 @@ export function Reading({ state, example, disabled, references, onEvidence, year
   const report = state.report;
   const ready = state.status === "done";
   const loading = state.status === "loading";
+  const actions = reportList(report?.actions).filter((item) => hasReportText(item?.text));
+  const cautions = reportList(report?.cautions).filter((item) => hasReportText(item?.text));
   const referenceMap = ready ? new Map(references.map((reference) => [reference.id, reference])) : undefined;
   const renderEvidence = (value?: EvidenceText) => <Evidence value={value} references={referenceMap} onEvidence={onEvidence} />;
   return (
@@ -96,19 +107,19 @@ export function Reading({ state, example, disabled, references, onEvidence, year
         </div>}
         {state.error && <p className="form-error report-error" role="alert"><CircleAlert size={15} />{state.error}</p>}
         {report && <div className="report-content">
-          {report.headline && <div className="report-lead">
+          {hasReportText(report.headline) && <div className="report-lead">
             <h3>{report.headline}</h3>
-            <div className="report-tags">{report.tags?.map((tag, i) => tag && <span key={i}>{tag}</span>)}</div>
+            <div className="report-tags">{reportList(report.tags).filter(hasReportText).map((tag, i) => <span key={i}>{tag}</span>)}</div>
           </div>}
-          {(report.strength?.text || report.blindSpot?.text) && <div className="report-contrast">
+          {(hasReportText(report.strength?.text) || hasReportText(report.blindSpot?.text)) && <div className="report-contrast">
             <article><h4>可发挥的优势</h4>{renderEvidence(report.strength)}</article>
             <article><h4>值得留意的盲区</h4>{renderEvidence(report.blindSpot)}</article>
           </div>}
-          {report.domains?.map((domain, i) => domain?.title && <article className="report-domain" key={i}><h4>{domain.title}</h4>{renderEvidence(domain)}</article>)}
-          {report.outlook?.text && <article className="report-domain"><h4>当下观察</h4>{renderEvidence(report.outlook)}</article>}
-          {(report.actions?.length || report.cautions?.length) ? <div className="report-contrast">
-            <article><h4>可以尝试</h4><ul>{report.actions?.map((item, i) => item?.text && <li key={i}>{renderEvidence(item)}</li>)}</ul></article>
-            <article><h4>建议留意</h4><ul>{report.cautions?.map((item, i) => item?.text && <li key={i}>{renderEvidence(item)}</li>)}</ul></article>
+          {reportList(report.domains).map((domain, i) => hasReportText(domain?.title) && <article className="report-domain" key={i}><h4>{domain.title}</h4>{renderEvidence(domain)}</article>)}
+          {hasReportText(report.outlook?.text) && <article className="report-domain"><h4>当下观察</h4>{renderEvidence(report.outlook)}</article>}
+          {actions.length > 0 || cautions.length > 0 ? <div className="report-contrast">
+            <article><h4>可以尝试</h4><ul>{actions.map((item, i) => <li key={i}>{renderEvidence(item)}</li>)}</ul></article>
+            <article><h4>建议留意</h4><ul>{cautions.map((item, i) => <li key={i}>{renderEvidence(item)}</li>)}</ul></article>
           </div> : null}
           {loading && <p className="report-wait" role="status"><LoaderCircle size={15} />持续生成中</p>}
           {ready && <Button onClick={onAsk}><Bot size={15} />继续追问</Button>}
