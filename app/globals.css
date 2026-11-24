@@ -30,7 +30,6 @@
   --earth: #dab477;
   --metal: #c4c9d6;
   --water: #8faed2;
-  --palace-link: #b6abcde0;
   --star: #d4b47825;
   --grid-line: #a8a0c20a;
   --bloom: #30365443;
@@ -41,6 +40,9 @@
   --font-display: "Noto Serif SC", "Songti SC", SimSun, serif;
   --font-data: "Inter Variable", ui-monospace, monospace;
   --radius: 16px;
+  --ease-chart: cubic-bezier(.16, 1, .3, 1);
+  --chart-enter: 440ms;
+  --chart-response: 240ms;
 }
 
 html, body { min-width: 0; min-height: 100%; overflow-x: clip; }
@@ -271,39 +273,6 @@ h1, h2, h3, h4 { min-width: 0; overflow-wrap: anywhere; }
 .year-grid button { padding: 7px 3px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0 5px; }
 .year-grid strong { color: var(--accent); font-variant-numeric: tabular-nums; font-family: var(--font-data); font-size: 13px; }
 
-.palace-grid {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(73px, 1fr));
-  position: relative; isolation: isolate; gap: 2px; min-width: 0; background: var(--line); border-radius: 9px; border: 1px solid var(--line); overflow: hidden;
-}
-.palace { position: relative; padding: 6px 7px; z-index: 1; min-width: 0; background: var(--surface-deep); color: var(--muted); }
-.palace[data-active=true], .palace[data-related=true] { background: color-mix(in srgb, var(--accent-wash-strong) 70%, var(--surface)); }
-.palace[data-active=true] { outline: 1px solid var(--accent); outline-offset: -1px; }
-.palace-name { padding: 2px 0; display: flex; align-items: center; gap: 3px; color: var(--ink); background: none; border: 0; font-weight: 600; font-size: 13px; white-space: nowrap; }
-.palace-name:hover, .palace[data-active=true] .palace-name { color: var(--accent); }
-.palace-name > span { color: var(--accent); font-size: 10px; padding-inline: 1px; }
-.palace-stars { display: flex; flex-wrap: wrap; gap: 0 4px; line-height: 1.45; }
-.palace-stars > button, .palace-stars > span { background: none; text-align: left; border: 0; padding: 0; color: var(--muted); font-size: 11px; white-space: nowrap; }
-.palace-stars > button:hover { color: var(--accent); text-decoration: underline; }
-.palace-stars sup { color: var(--accent); font-size: 9px; margin-left: 2px; }
-.palace > small { display: block; text-align: right; font-size: 10px; letter-spacing: .08em; margin-top: 2px; }
-.palace-hub {
-  display: grid; grid-row: 2 / 4; grid-column: 2 / 4; place-content: center; justify-items: center; gap: 6px;
-  text-align: center; color: var(--support); background: radial-gradient(ellipse at center, var(--surface-raised), var(--surface-deep));
-  min-width: 0; padding: 5px; font-size: 12px;
-}
-.palace-hub > * { z-index: 2; }
-.palace-hub strong { font-family: var(--font-display); font-weight: 600; font-size: 24px; color: var(--ink); }
-.palace-connections { position: absolute; z-index: 3; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: .75; }
-.palace-legend { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; font-size: 11px; }
-.palace-legend span { color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
-.palace-legend i { width: 11px; height: 0; border-top: 1px dashed var(--palace-link); }
-.palace-legend button { background: var(--surface-deep); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; color: var(--ink); white-space: nowrap; }
-.palace-legend button:hover { border-color: var(--accent); }
-.palace-legend button[data-transition="禄"] { color: var(--wood); }
-.palace-legend button[data-transition="权"] { color: var(--fire); }
-.palace-legend button[data-transition="科"] { color: var(--accent); }
-.palace-legend button[data-transition="忌"] { color: var(--water); }
-
 .cast-form { display: grid; gap: 15px; }
 .coin-tray { display: flex; justify-content: center; align-items: center; gap: 12px; min-height: 85px; perspective: 220px; border-radius: 8px; background: radial-gradient(ellipse, var(--accent-wash-strong), transparent 72%); }
 .coin {
@@ -439,16 +408,205 @@ h1, h2, h3, h4 { min-width: 0; overflow-wrap: anywhere; }
   .report-intro { flex-wrap: wrap; }
   .report-contrast { grid-template-columns: minmax(0, 1fr); }
   .period-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .palace { padding: 4px 4px; }
-  .palace-grid { grid-template-rows: repeat(4, minmax(71px, 1fr)); }
-  .palace-name { font-size: 12px; }
-  .palace-stars > button, .palace-stars > span { font-size: 10px; }
-  .palace-hub { font-size: 10px; }
-  .palace-hub strong { font-size: 19px; }
   .hexagram-line { grid-template-columns: 24px minmax(0, 1fr) 10px; gap: 3px; }
   .hexagram-line small { font-size: 10px; }
   .footer .brand-mark { width: 23px; height: 23px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+/* Hallmark · 紫微结果页 · 旧金、玄黑与宋体 · 贝塞尔飞化曲线与三方四正 */
+.ziwei-overview { display: flex; justify-content: space-between; align-items: end; gap: 16px 28px; padding-block: 24px 16px; border-bottom: 1px solid var(--line); }
+.ziwei-overview h1 { font: 600 clamp(2.05rem, 3.5vw, 2.95rem)/1.18 var(--font-display); letter-spacing: .08em; margin-bottom: 9px; }
+.ziwei-overview p { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 10px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ziwei-overview-state { color: var(--accent-soft); white-space: nowrap; }
+.ziwei-overview-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; flex: 0 0 auto; }
+.ziwei-overview-controls .calibration { position: relative; }
+.ziwei-overview-controls .calibration summary { font-size: 12px; min-height: 44px; }
+.ziwei-overview-controls .calibration dl { font-size: 12px; }
+.ziwei-overview-controls > .button { min-height: 44px; }
+.ziwei-workbench { grid-template-columns: minmax(0, 1fr); padding-top: 18px; }
+.ziwei-workbench > .input-column { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.ziwei-workbench .sample-note { grid-column: 1 / -1; }
+.ziwei-layout { display: grid; grid-template-columns: minmax(0, 2.3fr) minmax(270px, 1fr); grid-template-areas: "board detail" "flow-year detail"; gap: 18px 24px; align-items: start; }
+.ziwei-board-section { grid-area: board; min-width: 0; }
+.ziwei-board-head { display: flex; align-items: center; justify-content: space-between; gap: 6px 14px; margin-bottom: 12px; }
+.ziwei-board-head h2 { font: 600 clamp(1.22rem, 2.7vw, 1.65rem)/1.35 var(--font-display); letter-spacing: .055em; }
+.ziwei-layers { padding: 2px; gap: 2px; }
+.ziwei-layers button { min-height: 38px; }
+.ziwei-board {
+  min-width: 0; min-height: 0; aspect-ratio: 1.72; display: grid; position: relative; isolation: isolate; overflow: hidden;
+  grid-template: repeat(4, minmax(0, 1fr)) / repeat(4, minmax(0, 1fr)); gap: 1px;
+  border: 1px solid var(--line-strong); border-radius: 14px; background: var(--line-strong); box-shadow: 0 14px 44px var(--shadow);
+}
+.ziwei-center {
+  grid-area: 2 / 2 / 4 / 4; position: relative; display: grid; place-items: center;
+  overflow: hidden; text-align: center;
+  background: radial-gradient(ellipse at 50% 42%, var(--surface-hover), var(--surface-deep) 76%);
+  color: var(--muted); padding: 8px; font-variant-numeric: tabular-nums; font-size: 12px;
+}
+.ziwei-center::before {
+  content: ""; position: absolute; inset: 50% auto auto 50%; height: 78%; aspect-ratio: 1;
+  transform: translate(-50%, -50%); border: 1px solid var(--accent-wash-strong); border-radius: 50%; pointer-events: none;
+}
+.ziwei-board[data-yearly=true] .ziwei-center::before { border-style: dashed; }
+.ziwei-center-caption {
+  position: relative; z-index: 2; display: grid; align-items: center; justify-items: center; gap: 7px; padding: 8px 13px;
+  text-shadow: 0 1px 4px var(--surface-deep), 0 0 8px var(--surface-deep);
+}
+.ziwei-center-caption > .brand-mark { margin-bottom: 2px; }
+.ziwei-center strong { font: 600 clamp(1.16rem, 3vw, 2.06rem)/1.25 var(--font-display); color: var(--ink); letter-spacing: .12em; }
+.ziwei-center small { color: var(--accent-soft); font-size: 12px; white-space: nowrap; }
+.ziwei-center-period { min-height: 1.55em; }
+.ziwei-center-period small { display: block; }
+.ziwei-cell { min-width: 0; min-height: 0; position: relative; background: var(--surface-deep); transition: background-color .16s var(--ease-chart); }
+.ziwei-cell[data-related=true] { background: var(--surface-raised); }
+.ziwei-cell[data-life=true] { box-shadow: inset 0 -2px 0 var(--accent-soft); }
+.ziwei-cell[data-selected=true] {
+  background: color-mix(in srgb, var(--accent-wash-strong), var(--surface) 65%);
+  outline: 1px solid var(--accent-soft); outline-offset: -1px;
+}
+.ziwei-cell[data-source=true]:not([data-selected=true]) { background: var(--surface-hover); }
+.ziwei-cell > button {
+  display: grid; align-content: start; grid-template-rows: auto minmax(0, 1fr) auto; position: relative; z-index: 3;
+  width: 100%; height: 100%; padding: clamp(6px, 1.25vw, 16px); text-align: start; gap: 4px; background: transparent;
+}
+.ziwei-cell > button:focus-visible { outline-offset: -3px; }
+.ziwei-cell > button:active, .ziwei-fact:active { background: var(--accent-wash); }
+.ziwei-cell-title { display: flex; align-items: baseline; justify-content: space-between; gap: 2px; white-space: nowrap; color: var(--ink); }
+.ziwei-cell-title strong { font-size: clamp(.75rem, 1.45vw, 1.05rem); font-weight: 640; }
+.ziwei-cell-title > span { color: var(--accent-soft); font-size: 10px; }
+.ziwei-cell[data-selected=true] .ziwei-cell-title strong { color: var(--accent); }
+.ziwei-cell-stars { display: flex; flex-wrap: wrap; align-content: start; gap: 0 6px; font: 600 clamp(.73rem, 1.6vw, 1.16rem)/1.35 var(--font-display); color: var(--support); }
+.ziwei-cell-stars > span { white-space: nowrap; }
+.ziwei-cell-stars > span[data-active=true] { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.ziwei-cell-stars sup { color: var(--accent-soft); font: 600 10px/1 var(--font-body); margin-left: 1px; }
+.ziwei-cell-stars .ziwei-empty { font: 400 11px/1.4 var(--font-body); color: var(--muted); }
+.ziwei-cell-foot { display: flex; justify-content: space-between; gap: 4px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.ziwei-cell-changes { display: inline-flex; gap: 3px; }
+.ziwei-cell-changes b { color: var(--accent); font-weight: 600; }
+.ziwei-cell-changes b[data-transition], .ziwei-fact[data-transition], .ziwei-fact [data-transition] { color: var(--transition-color, var(--accent)); }
+.ziwei-layout [data-transition="禄"] { --transition-color: var(--wood); }
+.ziwei-layout [data-transition="权"] { --transition-color: var(--fire); }
+.ziwei-layout [data-transition="科"] { --transition-color: var(--accent); }
+.ziwei-layout [data-transition="忌"] { --transition-color: var(--water); }
+.ziwei-connections { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.ziwei-route-related {
+  fill: none; stroke: var(--metal); stroke-width: 1.05; stroke-dasharray: 4 5; opacity: .57;
+}
+.ziwei-route, .ziwei-route-halo { fill: none; stroke: var(--transition-color, var(--accent)); stroke-linecap: round; }
+.ziwei-route { stroke-width: 1.65; opacity: .84; }
+.ziwei-route-halo { stroke-width: 4.5; opacity: .41; }
+.ziwei-route-origin { fill: var(--accent-bright); opacity: .85; }
+.ziwei-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; padding-top: 12px; }
+.ziwei-tools > span { color: var(--muted); font-size: 12px; }
+.ziwei-year, .ziwei-detail { min-width: 0; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); padding: 17px; }
+.ziwei-year { grid-area: flow-year; position: relative; overflow: hidden; }
+.ziwei-year::before {
+  content: ""; position: absolute; top: 0; inset-inline: 0; height: 2px; opacity: 0; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--accent-soft) 48%, transparent);
+}
+.ziwei-year-head { display: flex; justify-content: space-between; align-items: center; gap: 6px 10px; }
+.ziwei-year-head h3 { color: var(--ink); font-size: 17px; font-weight: 650; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.ziwei-year-head h3 svg { color: var(--accent-soft); }
+.ziwei-year-controls { display: flex; gap: 4px; justify-content: end; min-width: 0; }
+.ziwei-year-controls .icon-button { min-width: 40px; min-height: 44px; }
+.ziwei-year-controls select { appearance: none; padding: 5px 23px 5px 8px; min-height: 44px; border-radius: 7px; border: 1px solid var(--line-strong); color: var(--ink); background: var(--surface-deep); font-size: 13px; font-variant-numeric: tabular-nums; }
+.ziwei-year-controls select[aria-invalid=true] { border-color: var(--danger); }
+.ziwei-year-status { color: var(--support); font-size: 13px; display: flex; gap: 6px; align-items: center; margin-block: 11px 8px; font-variant-numeric: tabular-nums; }
+.ziwei-spinner { animation: spin 1s linear infinite; }
+.ziwei-year-links, .ziwei-star-items { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.ziwei-fact, .evidence-links button {
+  display: inline-flex; gap: 5px; align-items: center; min-height: 36px; padding: 5px 8px; border-radius: 6px;
+  color: var(--support); border: 1px solid var(--line-strong); background: var(--surface-deep); font-size: 13px; line-height: 1.35; white-space: nowrap;
+  transition: border-color .15s, background-color .15s;
+}
+.ziwei-fact:hover, .ziwei-fact[aria-pressed=true], .evidence-links button:hover { color: var(--accent); border-color: var(--accent-dark); background: var(--accent-wash); }
+.ziwei-star-items[data-minor=true] .ziwei-fact:not(:hover, [aria-pressed=true]) { color: var(--muted); }
+.ziwei-star-items[data-minor=true] .ziwei-fact { font-size: 12px; }
+.ziwei-fact small { color: var(--muted); font-size: 11px; }
+.ziwei-detail {
+  grid-area: detail; padding: 22px;
+  background: radial-gradient(ellipse at 0 0, var(--accent-wash), transparent 58%), linear-gradient(165deg, var(--surface-raised), var(--surface) 42%);
+}
+.ziwei-detail-head { border-bottom: 1px solid var(--line-strong); padding-bottom: 16px; }
+.ziwei-detail-head h2 { margin: 5px 0 8px; font: 600 clamp(1.7rem, 3.2vw, 2.4rem)/1.2 var(--font-display); letter-spacing: .1em; }
+.ziwei-detail-head p { color: var(--support); font-size: 14px; line-height: 1.62; }
+.ziwei-detail-head p:first-child { color: var(--accent-soft); font-size: 12px; letter-spacing: .08em; }
+.ziwei-detail-data { display: grid; gap: 7px; margin-block: 14px 18px; }
+.ziwei-detail-data h3 { color: var(--ink); font-size: 13px; font-weight: 650; }
+.ziwei-detail-data h3:not(:first-child), .ziwei-detail-data > div > h3 { margin-top: 6px; }
+.ziwei-detail-data > div > h3 { margin-bottom: 7px; }
+.ziwei-detail-data p { font-size: 13px; }
+.ziwei-muted { color: var(--muted); }
+.ziwei-detail-annual { border-top: 1px solid var(--line); padding-block: 5px; }
+.ziwei-detail-annual > p + p { color: var(--accent-soft); padding-top: 5px; }
+.ziwei-ask { width: 100%; min-height: 44px; }
+.ziwei-report-link { display: flex; justify-content: center; gap: 6px; align-items: center; padding: 10px 0 0; color: var(--muted); font-size: 12px; }
+.ziwei-report-link:hover { color: var(--accent); }
+.evidence-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.evidence-links button { min-height: 34px; color: var(--accent); border-color: var(--accent-dark); text-align: start; white-space: normal; }
+.evidence-links button svg { flex: 0 0 auto; }
+[id^="chart-ref-"]:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ziwei-cell > [id^="chart-ref-"]:focus { outline-offset: -3px; }
+
+@media (max-width: 860px) {
+  .ziwei-overview { align-items: start; flex-direction: column; gap: 7px; padding-block: 24px 13px; }
+  .ziwei-overview-controls .calibration dl { inset-inline: 0 auto; }
+  .ziwei-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "board" "detail" "flow-year"; gap: 14px; }
+  .ziwei-workbench > .input-column { grid-template-columns: minmax(0, 1fr); }
+  .ziwei-detail { padding: 16px; }
+}
+@media (max-width: 550px) {
+  .ziwei-workbench { padding-top: 14px; }
+  .ziwei-overview h1 { margin-bottom: 6px; }
+  .ziwei-overview-controls { gap: 4px 10px; }
+  .ziwei-board { aspect-ratio: 1.02; border-radius: 8px; }
+  .ziwei-cell > button { padding: 5px 4px; gap: 2px; }
+  .ziwei-cell-title strong { font-size: clamp(.64rem, 3.02vw, .85rem); }
+  .ziwei-cell-stars { font-size: clamp(.65rem, 2.95vw, .87rem); gap: 0 2px; }
+  .ziwei-cell-stars .ziwei-empty, .ziwei-cell-foot { font-size: 10px; }
+  .ziwei-cell-foot { gap: 1px; }
+  .ziwei-cell-changes { gap: 1px; }
+  .ziwei-cell-stars sup { font-size: 8px; }
+  .ziwei-center-caption { gap: 4px; padding-inline: 6px; }
+  .ziwei-center-caption > .brand-mark { width: 27px; height: 27px; }
+  .ziwei-center strong { letter-spacing: .06em; }
+  .ziwei-center small { font-size: 10px; }
+  .ziwei-year { padding: 12px; }
+  .ziwei-fact, .evidence-links button { min-height: 44px; }
+}
+
+@keyframes chart-arrive {
+  from { opacity: .18; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes dial-arrive {
+  from { opacity: var(--dial-opacity-start, .18); transform: rotate(-12deg); }
+  to { opacity: var(--dial-opacity-end, 1); transform: rotate(0); }
+}
+@keyframes chart-refresh {
+  from { opacity: .12; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes palace-curves { from { opacity: .52; } to { opacity: 1; } }
+@keyframes year-loading {
+  from { opacity: .85; transform: translateX(-75%) scaleX(.4); }
+  to { opacity: .85; transform: translateX(75%) scaleX(.4); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-copy { animation: chart-arrive var(--chart-enter) var(--ease-chart) backwards; }
+  .instrument-rings, .instrument-ticks { transform-origin: 240px 200px; animation: dial-arrive 660ms var(--ease-chart) backwards; }
+  .instrument-rings { --dial-opacity-start: .04; --dial-opacity-end: .26; }
+  .instrument-ticks { --dial-opacity-end: .48; }
+  .instrument-needle { transform-origin: 240px 200px; animation: dial-arrive 540ms var(--ease-chart) 80ms backwards; }
+  .output-column > .chart-panel { animation: chart-arrive var(--chart-enter) var(--ease-chart) 65ms backwards; }
+  .ziwei-curve-set { animation: palace-curves 180ms var(--ease-chart) backwards; }
+  .ziwei-detail-head, .ziwei-detail-annual > p, .ziwei-cell-changes[data-visible=true],
+  .ziwei-center-period small, .ziwei-year-status > span {
+    animation: chart-refresh var(--chart-response) var(--ease-chart) backwards;
+  }
+  .ziwei-year[aria-busy=true]::before { animation: year-loading 860ms linear infinite; }
 }

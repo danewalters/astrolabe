@@ -1,8 +1,10 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { APICallError, Output, streamText } from "ai";
 import { BirthError, buildBazi, buildZiwei, currentYear } from "@/lib/calendar";
+import { chartReferences } from "@/lib/chart-references";
 import { buildCast, linePositions, lineTypes } from "@/lib/iching";
-import { chatSchema, questionIssue, readingInput, reportSchema } from "@/lib/schema";
+import type { ChartResult } from "@/lib/panels";
+import { chatSchema, questionIssue, readingInput, reportSchema, type ReadingInput } from "@/lib/schema";
 
 const system = `你是熟悉子平八字、紫微斗数、周易六爻、发展心理学与组织行为学的中文顾问。
 排盘 JSON 来自规则引擎。信任已输入的干支、宫位、星曜、四化、动爻，严禁另行计算、补造盘面或断言盘面未给出的信息。
@@ -24,11 +26,20 @@ function streamError(error: unknown) {
   return "解读未完整生成，请重试。";
 }
 
-function context(input: ReturnType<typeof readingInput.parse>) {
+function calculateChart(input: ReadingInput): ChartResult {
   if (input.module === "iching") {
     const issue = questionIssue(input.cast.question);
     if (issue) throw new BirthError(issue);
-    const cast = buildCast(input.cast);
+    return { module: input.module, chart: buildCast(input.cast) };
+  }
+  return input.module === "bazi"
+    ? { module: input.module, chart: buildBazi(input.birth, currentYear()) }
+    : { module: input.module, chart: buildZiwei(input.birth, input.viewYear ?? currentYear()) };
+}
+
+function context(result: ChartResult) {
+  if (result.module === "iching") {
+    const cast = result.chart;
     return {
       question: cast.question,
       original: { name: cast.original.name, number: cast.original.number, upper: cast.original.upper.name, lower: cast.original.lower.name },
@@ -44,8 +55,7 @@ function context(input: ReturnType<typeof readingInput.parse>) {
       })),
     };
   }
-  const result = input.module === "bazi" ? buildBazi(input.birth, currentYear()) : buildZiwei(input.birth, currentYear());
-  const { birth, ...chart } = result;
+  const { birth, ...chart } = result.chart;
   return { ...chart, approximateTime: birth.approximate ?? null, usedTrueSolarTime: birth.solar !== null };
 }
 
@@ -57,10 +67,11 @@ function focusData(chart: ReturnType<typeof context>, kind?: string, id?: string
     if (kind === "year") return chart.annual.find((item) => String(item.year) === id);
   }
   if ("palaces" in chart && kind === "palace") return chart.palaces.find((item) => String(item.index) === id);
+  if ("palaces" in chart && kind === "annual") return chart.year;
   if ("palaces" in chart && kind === "star" && id) {
     const [index, name] = id.split(":");
     const palace = chart.palaces.find((item) => String(item.index) === index);
-    const star = palace?.major.find((item) => item.name === name);
+    const star = palace && [...palace.major, ...palace.minor].find((item) => item.name === name);
     if (star) return { palace: palace?.name, star };
   }
   if (chart.lines) {
@@ -80,13 +91,15 @@ export async function POST(request: Request) {
   }
 
   const input = data.data;
-  let chart: ReturnType<typeof context>;
+  let result: ChartResult;
   try {
-    chart = context(input);
+    result = calculateChart(input);
   } catch (error) {
     return Response.json({ error: error instanceof BirthError ? error.message : "暂时无法读取盘面。" }, { status: 400 });
   }
 
+  const chart = context(result);
+  const references = chartReferences(result).map(({ id, label }) => ({ id, label }));
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) return Response.json({ error: "服务端尚未配置 DEEPSEEK_API_KEY。" }, { status: 503 });
 
@@ -130,9 +143,9 @@ export async function POST(request: Request) {
     const result = streamText({
       ...common,
       system: system,
-      prompt: prompt + `\n输出符合约定结构的中文 JSON。headline 为一句话概括，只作反思假设；tags 给 3 个短标签。strength、blindSpot、domains、outlook、actions 和 cautions 均附 evidence。按「${labels}」顺序输出三个 domains，outlook 解释当前流年或本卦与变卦。每条 text 用 1–3 句，写 2–3 项行动、1–3 项谨慎事项。`,
+      prompt: prompt + `\n可引用的盘面索引：${JSON.stringify(references)}。\n输出符合约定结构的中文 JSON。headline 为一句话概括，只作反思假设。tags 给 3 个短标签。strength、blindSpot、domains、outlook、actions 和 cautions 每条均提供 evidence 和 referenceIds。evidence 说明盘面事实如何支持这一条，referenceIds 逐字采用 1–3 个直接对应的索引 ID。先核对 ID 的标签及盘面再引用。按「${labels}」顺序输出三个 domains，outlook 解释盘面中所选流年或本卦与变卦。每条 text 用 1–3 句，写 2–3 项行动、1–3 项谨慎事项。`,
       maxOutputTokens: 9500,
-      output: Output.object({ name: "AstrolabeReading", schema: reportSchema }),
+      output: Output.object({ name: "AstrolabeReading", schema: reportSchema(references.map(({ id }) => id)) }),
     });
     let nextUpdate = 0;
     for await (const report of result.partialOutputStream) {

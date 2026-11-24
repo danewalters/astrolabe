@@ -7,6 +7,7 @@ import { LineChart, RadarChart, type LineSeriesOption, type RadarSeriesOption } 
 import { GridComponent, RadarComponent, TooltipComponent, type GridComponentOption, type RadarComponentOption, type TooltipComponentOption } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
 import type { BaziChart, Element } from "@/lib/calendar";
+import { chartAnchor } from "@/lib/chart-references";
 import type { Focus } from "@/lib/panels";
 
 registerCharts([LineChart, RadarChart, GridComponent, RadarComponent, TooltipComponent, SVGRenderer]);
@@ -157,7 +158,7 @@ export function Bazi({ chart, example, inspect }: { chart: BaziChart; example: b
         <div className="chart-meta"><span>{chart.birth.name} · {chart.birth.lunar}</span><Calibration birth={chart.birth} /></div>
         <div className="pillars">
           {chart.pillars.map((pillar, i) => (
-            <button type="button" className="pillar" key={pillar.name} data-master={i === 2}
+            <button type="button" className="pillar" key={pillar.name} data-master={i === 2} id={chartAnchor("pillar-" + i)}
               aria-label={`${pillar.name} ${pillar.stem}${pillar.branch} ${pillar.relationship}，查看释义`}
               onClick={() => inspect({
                 kind: "pillar", id: pillar.name, label: `${pillar.name} · ${pillar.stem}${pillar.branch}`,
@@ -181,8 +182,8 @@ export function Bazi({ chart, example, inspect }: { chart: BaziChart; example: b
         <div className="energy-grid">
           <div className="radar-wrap">{view === "radar" ? <Radar weights={chart.weights} onSelect={inspectElement} /> : <Flow onSelect={inspectElement} />}</div>
           <div className="energy-legend">
-            {chart.weights.map(({ element, percent }) => (
-              <button key={element} type="button" className="element-row" data-element={element} onClick={() => inspectElement(element)} aria-label={element + " " + percent + "%，查看五行释义"}>
+            {chart.weights.map(({ element, percent }, index) => (
+              <button key={element} id={chartAnchor("element-" + index)} type="button" className="element-row" data-element={element} onClick={() => inspectElement(element)} aria-label={element + " " + percent + "%，查看五行释义"}>
                 <span className="element-name"><i />{element}</span>
                 <span className="meter" aria-hidden="true"><span style={{ width: `${percent}%` }} /></span>
                 <span className="percent">{percent}<small>%</small></span>
@@ -236,11 +237,11 @@ export function Trends({ chart, inspect }: { chart: BaziChart; inspect: (item: F
         <div className="trend-copy"><span>五行活跃度</span><span>{active.ganZhi} · {active.startYear}–{active.endYear} · {active.activity}</span></div>
         <div ref={line} className="trend-chart" role="img" aria-label="每十年一运的五行活跃度曲线" />
         <div className="period-grid" aria-label="大运节点">
-          {chart.periods.map((item, index) => <button key={item.startYear} type="button" aria-pressed={period === index} onClick={() => inspectPeriod(index)} title={`${item.startYear}–${item.endYear}`}>{item.ganZhi}</button>)}
+          {chart.periods.map((item, index) => <button key={item.startYear} id={chartAnchor("period-" + item.startYear)} type="button" aria-pressed={period === index} onClick={() => inspectPeriod(index)} title={`${item.startYear}–${item.endYear}`}>{item.ganZhi}</button>)}
         </div>
         <div className="year-grid" aria-label="关键流年">
           {keyYears.map((item) => (
-            <button type="button" key={item.year} onClick={() => inspect({ kind: "year", id: String(item.year), label: `${item.year} · ${item.ganZhi}流年`,
+            <button type="button" key={item.year} id={chartAnchor("year-" + item.year)} onClick={() => inspect({ kind: "year", id: String(item.year), label: `${item.year} · ${item.ganZhi}流年`,
               detail: `活跃度 ${item.activity}${item.period ? " · " + item.period + "大运" : ""}`, description: "流年天干地支以立春为界。活跃度描述盘内的五行对应关系。" })}>
               <strong>{item.year}</strong><span>{item.ganZhi}流年</span>
             </button>

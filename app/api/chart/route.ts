@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const reference = currentYear();
     return data.module === "bazi"
       ? Response.json({ module: "bazi", chart: buildBazi(data.birth, reference) })
-      : Response.json({ module: "ziwei", chart: buildZiwei(data.birth, reference) });
+      : Response.json({ module: "ziwei", chart: buildZiwei(data.birth, data.viewYear ?? reference) });
   } catch (error) {
     const message = error instanceof BirthError ? error.message : "暂时无法排盘，请核对输入后重试。";
     return Response.json({ error: message }, { status: error instanceof BirthError ? 400 : 500 });

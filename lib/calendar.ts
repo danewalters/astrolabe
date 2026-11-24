@@ -195,9 +195,17 @@ export function buildZiwei(input: BirthInput, referenceYear: number) {
     };
   });
   const readYear = board.horoscope(referenceYear + "-07-01", 6).yearly;
+  const transformations = readYear.mutagen.flatMap((star, index) => {
+    const palace = palaces.find((item) => [...item.major, ...item.minor].some((candidate) => candidate.name === star));
+    return palace ? [{ type: transitions[index], star, palaceIndex: palace.index }] : [];
+  });
   return {
     birth: birth.details, palaces, soul: board.soul, body: board.body, bureau: board.fiveElementsClass,
-    year: { year: referenceYear, stem: readYear.heavenlyStem, branch: readYear.earthlyBranch, mutagen: readYear.mutagen, palace: palaces[readYear.index]?.name },
+    year: {
+      year: referenceYear, stem: readYear.heavenlyStem, branch: readYear.earthlyBranch,
+      mutagen: readYear.mutagen, palace: palaces[readYear.index]?.name,
+      lifePalaceIndex: readYear.index, palaceNames: readYear.palaceNames, transformations,
+    },
   };
 }
 

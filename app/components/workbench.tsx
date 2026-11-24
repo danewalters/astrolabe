@@ -1,17 +1,19 @@
 "use client";
 
-import { BookOpen, ChevronDown, Compass, Dices, Layers3, ScanLine, Sparkles } from "lucide-react";
+import { BookOpen, ChevronDown, Compass, Dices, Layers3, Pencil, ScanLine, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { chartAnchor, chartReferences, type ChartReference } from "@/lib/chart-references";
 import { exampleBirth } from "@/lib/example";
 import type { ChartResult, ChartSession, Focus } from "@/lib/panels";
 import { modules, type BirthInput, type CastInput, type Module, type ReadingInput } from "@/lib/schema";
-import { Bazi, Trends } from "./bazi";
-import { BirthForm } from "./birth-form";
+import { Bazi, Calibration, Trends } from "./bazi";
+import { BirthForm, type BirthFormHandle } from "./birth-form";
 import { CastForm } from "./cast-form";
 import { BrandMark, Instrument } from "./instrument";
-import { IChing, Ziwei } from "./other-charts";
+import { IChing, type HexagramView } from "./other-charts";
 import { Copilot, readEvents, Reading, type ReportState } from "./readings";
 import { Button } from "./ui/button";
+import { Ziwei, type PalaceSelection } from "./ziwei";
 
 const views = {
   bazi: { nav: "八字", title: "八字命盘", icon: Layers3, description: "从出生的四组干支出发，观察五行分布与人生节奏。" },
@@ -41,9 +43,17 @@ export function Workbench({ specimens, timeZones, year }: { specimens: Record<Mo
   const [copilot, setCopilot] = useState(false);
   const [focus, setFocus] = useState<Focus | null>(null);
   const [origin, setOrigin] = useState<HTMLElement | null>(null);
+  const [editingZiwei, setEditingZiwei] = useState(false);
+  const [ziweiSelection, setZiweiSelection] = useState<PalaceSelection | null>(null);
+  const [ziweiYearly, setZiweiYearly] = useState(false);
+  const [changingYear, setChangingYear] = useState(false);
+  const [yearError, setYearError] = useState("");
+  const [hexagramView, setHexagramView] = useState<HexagramView>("original");
+  const [jump, setJump] = useState<{ id: string } | null>(null);
   const chartRequests = useRef<Partial<Record<Module, AbortController>>>({});
   const reportRequests = useRef<Partial<Record<Module, AbortController>>>({});
   const output = useRef<HTMLDivElement>(null);
+  const birthEditor = useRef<BirthFormHandle>(null);
 
   useEffect(() => {
     const charts = chartRequests.current;
@@ -57,6 +67,14 @@ export function Workbench({ specimens, timeZones, year }: { specimens: Record<Mo
   const session = sessions[module];
   const { result, example } = session;
   const view = views[module];
+  const isZiwei = result.module === "ziwei";
+
+  useEffect(() => {
+    if (!jump) return;
+    const target = document.getElementById(jump.id);
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }, [jump]);
 
   function choose(next: Module) {
     setModule(next);
@@ -70,6 +88,26 @@ export function Workbench({ specimens, timeZones, year }: { specimens: Record<Mo
     setCopilot(true);
   }, []);
 
+  function locateAnnualPalace(palace: number, star?: string) {
+    setZiweiYearly(true);
+    setZiweiSelection({ palace, star });
+    setJump({ id: chartAnchor("palace-" + palace) });
+  }
+
+  function revealEvidence(reference: ChartReference) {
+    const { id } = reference;
+    if (reference.kind === "annual" || reference.kind === "annual-transformation") {
+      locateAnnualPalace(reference.palace, "star" in reference ? reference.star : undefined);
+      return;
+    }
+    if ("palace" in reference) {
+      setZiweiSelection({ palace: reference.palace, star: "star" in reference ? reference.star : undefined });
+    }
+    if (reference.kind === "hexagram") setHexagramView(id === "hexagram-changed" ? "changed" : "original");
+    if (reference.kind === "line") setHexagramView("original");
+    setJump({ id: chartAnchor(id) });
+  }
+
   async function requestReport(input: ReadingInput, jump = false) {
     const name = input.module;
     reportRequests.current[name]?.abort();
@@ -79,6 +117,7 @@ export function Workbench({ specimens, timeZones, year }: { specimens: Record<Mo
     if (jump) document.getElementById("reading")?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
     try {
       await readEvents({ mode: "report", input }, controller.signal, (event) => {
+        if (controller.signal.aborted) return;
         if (event.type === "partial") {
           setReads((previous) => ({ ...previous, [name]: { status: "loading", report: event.report } }));
         }
@@ -93,7 +132,7 @@ export function Workbench({ specimens, timeZones, year }: { specimens: Record<Mo
     }
   }
 
-  async function generate(input: ReadingInput, withAI: boolean) {
+  async function generate(input: ReadingInput, withAI: boolean, forYear = false) {
     const name = input.module;
     chartRequests.current[name]?.abort();
     const controller = new AbortController();
@@ -103,18 +142,45 @@ export function Workbench({ specimens, timeZones, year }: { specimens: Record<Mo
       const response = await fetch("/api/chart", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal: controller.signal,
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "生成失败，请重试。");
+      if (!response.ok) throw new Error((await response.json()).error ?? "生成失败，请重试。");
+      const data: ChartResult = await response.json();
+      if (controller.signal.aborted) return;
+      const updated = input.module === "ziwei" && data.module === "ziwei" ? { ...input, viewYear: data.chart.year.year } : input;
       reportRequests.current[name]?.abort();
       setReads((previous) => ({ ...previous, [name]: idle }));
-      setSessions((previous) => ({ ...previous, [name]: { input, result: data as ChartResult, example: false } }));
-      setRevisions((previous) => ({ ...previous, [name]: previous[name] + 1 }));
-      if (withAI) void requestReport(input);
-      if (output.current?.dataset.module === name && matchMedia("(max-width: 860px)").matches) {
-        output.current.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      setSessions((previous) => ({ ...previous, [name]: { input: updated, result: data, example: forYear && previous[name].example } }));
+      if (forYear) {
+        setZiweiYearly(true);
+      } else {
+        setRevisions((previous) => ({ ...previous, [name]: previous[name] + 1 }));
+        if (name === "ziwei") {
+          setEditingZiwei(false);
+          setZiweiSelection(null);
+          setZiweiYearly(false);
+          setYearError("");
+          if (output.current?.dataset.module === name) setJump({ id: "ziwei-title" });
+        } else if (output.current?.dataset.module === name && matchMedia("(max-width: 860px)").matches) {
+          output.current.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+        }
+        if (name === "iching") setHexagramView("original");
       }
+      if (withAI) void requestReport(updated);
     } finally {
       if (!controller.signal.aborted) setPending((previous) => ({ ...previous, [name]: false }));
+    }
+  }
+
+  async function changeZiweiYear(value: number) {
+    const input = sessions.ziwei.input;
+    if (input.module !== "ziwei" || pending.ziwei) return;
+    setYearError("");
+    setChangingYear(true);
+    try {
+      await generate({ ...input, viewYear: value }, false, true);
+    } catch (error) {
+      setYearError(error instanceof Error ? error.message : "无法排出该流年，请重试。");
+    } finally {
+      setChangingYear(false);
     }
   }
 
@@ -123,6 +189,7 @@ export function Workbench({ specimens, timeZones, year }: { specimens: Record<Mo
     setSessions((previous) => ({ ...previous, iching: specimens.iching }));
     setRevisions((previous) => ({ ...previous, iching: previous.iching + 1 }));
     setReads((previous) => ({ ...previous, iching: idle }));
+    setHexagramView("original");
   }
 
   const birthModule = module === "ziwei" ? "ziwei" : "bazi";
@@ -146,7 +213,22 @@ export function Workbench({ specimens, timeZones, year }: { specimens: Record<Mo
         </div>
       </header>
       <main className="shell main" id="top">
-        <div className="hero">
+        {isZiwei ? <section className="ziwei-overview" aria-labelledby="ziwei-title">
+          <div>
+            <h1 id="ziwei-title" tabIndex={-1}>紫微命盘</h1>
+            <p><span className="ziwei-overview-state">{example ? "示例命盘" : "出生资料"}</span>
+              <span>{result.chart.birth.civil} · {result.chart.birth.name}</span></p>
+          </div>
+          <div className="ziwei-overview-controls">
+            <Calibration birth={result.chart.birth} />
+            <Button aria-expanded={editingZiwei} aria-controls="birth-editor" onClick={() => {
+              if (!editingZiwei && !example && session.input.module === "ziwei") birthEditor.current?.load(session.input.birth);
+              setEditingZiwei(!editingZiwei);
+            }}>
+              <Pencil size={15} />{editingZiwei ? "收起表单" : example ? "填写生辰" : "编辑生辰"}
+            </Button>
+          </div>
+        </section> : <div className="hero">
           <div className="hero-copy">
             <p className="hero-kicker"><ScanLine size={14} />东方命理工作台</p>
             <h1>{view.title}</h1>
@@ -154,19 +236,22 @@ export function Workbench({ specimens, timeZones, year }: { specimens: Record<Mo
           </div>
           <Instrument />
           <span className="hero-rule" aria-hidden="true" />
-        </div>
-        <div className="workbench">
-          <aside className="input-column" aria-label="排盘输入">
-            <div hidden={module === "iching"}><BirthForm module={birthModule} busy={!!pending[birthModule]} timeZones={timeZones} year={year} onGenerate={(birth: BirthInput, withAI) => generate({ module: birthModule, birth }, withAI)} /></div>
+        </div>}
+        <div className={isZiwei ? "workbench ziwei-workbench" : "workbench"}>
+          <aside id="birth-editor" hidden={isZiwei && !editingZiwei} className="input-column" aria-label="排盘输入">
+            <div hidden={module === "iching"}><BirthForm ref={birthEditor} module={birthModule} busy={!!pending[birthModule]} timeZones={timeZones} year={year} onGenerate={(birth: BirthInput, withAI) => generate({ module: birthModule, birth }, withAI)} /></div>
             <div hidden={module !== "iching"}><CastForm pending={!!pending.iching} onComplete={(cast: CastInput) => generate({ module: "iching", cast }, false)} onReset={resetCast} /></div>
             <Method key={module} module={module} />
             {example && module !== "iching" && <p className="sample-note">当前示例使用 {exampleBirth.location.name} 的出生资料。</p>}
           </aside>
           <div className="output-column" ref={output} data-module={module}>
             {result.module === "bazi" && <Bazi key={"bazi-" + revision} chart={result.chart} example={example} inspect={inspect} />}
-            {result.module === "ziwei" && <Ziwei key={"ziwei-" + revision} chart={result.chart} example={example} inspect={inspect} />}
-            {result.module === "iching" && <IChing key={"iching-" + revision} chart={result.chart} example={example} inspect={inspect} />}
-            <Reading state={reads[module] ?? idle} example={example} disabled={!!pending[module]} onRequest={() => void requestReport(session.input, true)} onAsk={() => inspect()} />
+            {result.module === "ziwei" && <Ziwei key={"ziwei-" + revision} chart={result.chart} selection={ziweiSelection} onSelect={setZiweiSelection}
+              isYearly={ziweiYearly} setYearly={setZiweiYearly} busy={!!pending.ziwei} changingYear={changingYear} yearError={yearError}
+              onYear={(value) => void changeZiweiYear(value)} onLocateAnnual={locateAnnualPalace} inspect={inspect} />}
+            {result.module === "iching" && <IChing key={"iching-" + revision} chart={result.chart} example={example} inspect={inspect} view={hexagramView} setView={setHexagramView} />}
+            <Reading state={reads[module] ?? idle} example={example} disabled={!!pending[module]} references={chartReferences(result)} onEvidence={revealEvidence}
+              year={result.module === "ziwei" ? result.chart.year.year : undefined} onRequest={() => void requestReport(session.input, true)} onAsk={() => inspect()} />
             {result.module === "bazi" && <Trends key={"trends-" + revision} chart={result.chart} inspect={inspect} />}
           </div>
         </div>
@@ -176,7 +261,8 @@ export function Workbench({ specimens, timeZones, year }: { specimens: Record<Mo
         <p>传统命理的象征解读，仅供自我探索与决策反思。</p>
       </footer>
       <button type="button" className="floating-ask icon-button" aria-label="打开 AI 命理顾问" onClick={() => inspect()}><Sparkles size={22} /></button>
-      <Copilot key={module + revision + (focus ? focus.kind + focus.id : "")} open={copilot} onOpen={setCopilot} focus={focus} input={session.input} example={example} returnTo={origin} />
+      <Copilot key={module + revision + (session.input.module === "ziwei" ? "-" + session.input.viewYear : "") + (focus ? focus.kind + focus.id : "")}
+        open={copilot} onOpen={setCopilot} focus={focus} input={session.input} example={example} returnTo={origin} />
     </>
   );
 }

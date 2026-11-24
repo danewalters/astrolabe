@@ -4,6 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import type { DeepPartial } from "ai";
 import { Bot, CircleAlert, Compass, LoaderCircle, Send, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import type { ChartReference } from "@/lib/chart-references";
 import type { Focus } from "@/lib/panels";
 import type { ReadingInput, Report } from "@/lib/schema";
 import { Button } from "./ui/button";
@@ -50,21 +51,42 @@ export async function readEvents(payload: unknown, signal: AbortSignal, receive:
   }
 }
 
-function Evidence({ value }: { value?: { text?: string; evidence?: string } }) {
-  return <>{value?.text && <p>{value.text}</p>}{value?.evidence && <small className="evidence">盘面依据 · {value.evidence}</small>}</>;
+type EvidenceText = { text?: string; evidence?: string; referenceIds?: (string | undefined)[] };
+
+function Evidence({ value, references, onEvidence }: {
+  value?: EvidenceText;
+  references?: ReadonlyMap<string, ChartReference>;
+  onEvidence: (reference: ChartReference) => void;
+}) {
+  const matches = [...new Set(value?.referenceIds)].flatMap((id) => {
+    const reference = id && references?.get(id);
+    return reference ? [reference] : [];
+  });
+  return <>
+    {value?.text && <p>{value.text}</p>}
+    {value?.evidence && <small className="evidence">盘面依据 · {value.evidence}</small>}
+    {matches.length > 0 && <div className="evidence-links" aria-label="查看盘面依据">
+      {matches.map((reference) => <button type="button" key={reference.id} onClick={() => onEvidence(reference)}>
+        <Compass size={13} />{reference.label}
+      </button>)}
+    </div>}
+  </>;
 }
 
-export function Reading({ state, example, disabled, onRequest, onAsk }: {
-  state: ReportState; example: boolean; disabled: boolean; onRequest: () => void; onAsk: () => void;
+export function Reading({ state, example, disabled, references, onEvidence, year, onRequest, onAsk }: {
+  state: ReportState; example: boolean; disabled: boolean; references: ChartReference[];
+  onEvidence: (reference: ChartReference) => void; year?: number; onRequest: () => void; onAsk: () => void;
 }) {
   const report = state.report;
   const ready = state.status === "done";
   const loading = state.status === "loading";
+  const referenceMap = ready ? new Map(references.map((reference) => [reference.id, reference])) : undefined;
+  const renderEvidence = (value?: EvidenceText) => <Evidence value={value} references={referenceMap} onEvidence={onEvidence} />;
   return (
     <section className="panel report-panel" id="reading" aria-labelledby="report-heading" aria-busy={loading}>
       <div className="panel-head">
         <div className="head-group"><span className="head-icon"><Sparkles size={18} /></span><h2 id="report-heading">AI 深度解读</h2></div>
-        <span className="model-label">DeepSeek</span>
+        <span className="model-label">{year ? `${year} 流年 · ` : ""}DeepSeek</span>
       </div>
       <div className="chart-body">
         {!report && <div className="report-intro">
@@ -79,14 +101,14 @@ export function Reading({ state, example, disabled, onRequest, onAsk }: {
             <div className="report-tags">{report.tags?.map((tag, i) => tag && <span key={i}>{tag}</span>)}</div>
           </div>}
           {(report.strength?.text || report.blindSpot?.text) && <div className="report-contrast">
-            <article><h4>可发挥的优势</h4><Evidence value={report.strength} /></article>
-            <article><h4>值得留意的盲区</h4><Evidence value={report.blindSpot} /></article>
+            <article><h4>可发挥的优势</h4>{renderEvidence(report.strength)}</article>
+            <article><h4>值得留意的盲区</h4>{renderEvidence(report.blindSpot)}</article>
           </div>}
-          {report.domains?.map((domain, i) => domain?.title && <article className="report-domain" key={i}><h4>{domain.title}</h4><Evidence value={domain} /></article>)}
-          {report.outlook?.text && <article className="report-domain"><h4>当下观察</h4><Evidence value={report.outlook} /></article>}
+          {report.domains?.map((domain, i) => domain?.title && <article className="report-domain" key={i}><h4>{domain.title}</h4>{renderEvidence(domain)}</article>)}
+          {report.outlook?.text && <article className="report-domain"><h4>当下观察</h4>{renderEvidence(report.outlook)}</article>}
           {(report.actions?.length || report.cautions?.length) ? <div className="report-contrast">
-            <article><h4>可以尝试</h4><ul>{report.actions?.map((item, i) => item?.text && <li key={i}><Evidence value={item} /></li>)}</ul></article>
-            <article><h4>建议留意</h4><ul>{report.cautions?.map((item, i) => item?.text && <li key={i}><Evidence value={item} /></li>)}</ul></article>
+            <article><h4>可以尝试</h4><ul>{report.actions?.map((item, i) => item?.text && <li key={i}>{renderEvidence(item)}</li>)}</ul></article>
+            <article><h4>建议留意</h4><ul>{report.cautions?.map((item, i) => item?.text && <li key={i}>{renderEvidence(item)}</li>)}</ul></article>
           </div> : null}
           {loading && <p className="report-wait" role="status"><LoaderCircle size={15} />持续生成中</p>}
           {ready && <Button onClick={onAsk}><Bot size={15} />继续追问</Button>}

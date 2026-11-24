@@ -49,28 +49,30 @@ export type CastInput = z.infer<typeof castSchema>;
 
 export const readingInput = z.discriminatedUnion("module", [
   z.object({ module: z.literal("bazi"), birth: birthSchema }),
-  z.object({ module: z.literal("ziwei"), birth: birthSchema }),
+  z.object({ module: z.literal("ziwei"), birth: birthSchema, viewYear: z.number().int().min(years.min).max(years.max).optional() }),
   z.object({ module: z.literal("iching"), cast: castSchema }),
 ]);
 export type ReadingInput = z.infer<typeof readingInput>;
 
-const evidence = z.object({
-  text: z.string().min(1),
-  evidence: z.string().min(1),
-});
+export function reportSchema(referenceIds: readonly string[]) {
+  const evidence = z.object({
+    text: z.string().min(1),
+    evidence: z.string().min(1),
+    referenceIds: z.array(z.enum(referenceIds)).min(1).max(3),
+  });
+  return z.object({
+    headline: z.string().min(1),
+    tags: z.array(z.string().min(1)).length(3),
+    strength: evidence,
+    blindSpot: evidence,
+    domains: z.array(evidence.extend({ title: z.string().min(1) })).length(3),
+    outlook: evidence,
+    actions: z.array(evidence).min(2).max(3),
+    cautions: z.array(evidence).min(1).max(3),
+  });
+}
 
-export const reportSchema = z.object({
-  headline: z.string().min(1),
-  tags: z.array(z.string().min(1)).length(3),
-  strength: evidence,
-  blindSpot: evidence,
-  domains: z.array(evidence.extend({ title: z.string().min(1) })).length(3),
-  outlook: evidence,
-  actions: z.array(evidence).min(2).max(3),
-  cautions: z.array(evidence).min(1).max(3),
-});
-
-export type Report = z.infer<typeof reportSchema>;
+export type Report = z.infer<ReturnType<typeof reportSchema>>;
 
 export const chatSchema = z.object({
   focus: z.object({ kind: z.string().max(20), id: z.string().max(120) }).optional(),

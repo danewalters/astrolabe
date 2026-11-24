@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays, ChevronDown, Clock3, MapPin, ScanLine, Sparkles } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useImperativeHandle, useState, type FormEvent, type Ref } from "react";
 import { exampleBirth } from "@/lib/example";
 import { approximateTimes, locationSchema, timeHints, years, type BirthDate, type BirthInput } from "@/lib/schema";
 import { Button } from "./ui/button";
@@ -60,8 +60,11 @@ function coordinateFrom(value?: number): Coordinate {
   return { degrees: value === undefined ? "" : String(Math.abs(value)), negative: value !== undefined && value < 0 };
 }
 
-export function BirthForm({ module, busy, timeZones, year, onGenerate }: {
+export type BirthFormHandle = { load: (birth: BirthInput) => void };
+
+export function BirthForm({ module, busy, timeZones, year, onGenerate, ref }: {
   module: Module; busy: boolean; timeZones: string[]; year: number; onGenerate: (input: BirthInput, withAI: boolean) => Promise<void>;
+  ref?: Ref<BirthFormHandle>;
 }) {
   const [calendar, setCalendar] = useState<BirthDate["calendar"]>("solar");
   const [date, setDate] = useState<DateFields>(emptyDate);
@@ -84,24 +87,26 @@ export function BirthForm({ module, busy, timeZones, year, onGenerate }: {
 
   const latestYear = Math.min(year, years.max);
 
-  function fillExample() {
-    setCalendar(exampleBirth.calendar);
-    setDate({ year: String(exampleBirth.year), month: String(exampleBirth.month), day: String(exampleBirth.day) });
-    setLeap(exampleBirth.leap);
-    const [exampleHour, exampleMinute] = exampleBirth.time.split(":");
-    setHour(exampleHour);
-    setMinute(exampleMinute);
-    setSex(exampleBirth.sex);
-    setApproximate(false);
-    setTimeZone(exampleBirth.location.timeZone);
-    setCountry(exampleBirth.location.country ?? "");
-    setProvince(exampleBirth.location.province ?? "");
-    setCity(exampleBirth.location.name);
-    setLongitude(coordinateFrom(exampleBirth.location.longitude));
-    setLatitude(coordinateFrom(exampleBirth.location.latitude));
-    setShowCoordinates(true);
+  function loadBirth(birth: BirthInput) {
+    setCalendar(birth.calendar);
+    setDate({ year: String(birth.year), month: String(birth.month), day: String(birth.day) });
+    setLeap(birth.leap);
+    const [birthHour, birthMinute] = birth.time.split(":");
+    setHour(birthHour);
+    setMinute(birthMinute);
+    setSex(birth.sex);
+    setApproximate(!!birth.hint);
+    if (birth.hint) setHint(birth.hint);
+    setTimeZone(birth.location.timeZone);
+    setCountry(birth.location.country ?? "");
+    setProvince(birth.location.province ?? "");
+    setCity(birth.location.name);
+    setLongitude(coordinateFrom(birth.location.longitude));
+    setLatitude(coordinateFrom(birth.location.latitude));
+    setShowCoordinates(birth.location.longitude !== undefined || birth.location.latitude !== undefined);
     setError("");
   }
+  useImperativeHandle(ref, () => ({ load: loadBirth }), []);
 
   async function changeCalendar(next: BirthDate["calendar"]) {
     if (next === calendar) return;
@@ -162,7 +167,7 @@ export function BirthForm({ module, busy, timeZones, year, onGenerate }: {
     <section className="panel input-panel" aria-labelledby="birth-heading">
       <div className="panel-head">
         <div className="head-group"><span className="head-icon"><ScanLine size={18} /></span><h2 id="birth-heading">生辰录入</h2></div>
-        <button type="button" className="text-button" onClick={fillExample} disabled={busy || switching}>填入示例</button>
+        <button type="button" className="text-button" onClick={() => loadBirth(exampleBirth)} disabled={busy || switching}>填入示例</button>
       </div>
       <form className="birth-form" onSubmit={submit}>
         <fieldset disabled={busy || switching}>

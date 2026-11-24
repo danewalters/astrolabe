@@ -11,7 +11,7 @@ async function getWorkbenchData() {
   const year = currentYear();
   const specimens: Record<Module, ChartSession> = {
     bazi: { result: { module: "bazi", chart: buildBazi(exampleBirth, year) }, input: { module: "bazi", birth: exampleBirth }, example: true },
-    ziwei: { result: { module: "ziwei", chart: buildZiwei(exampleBirth, year) }, input: { module: "ziwei", birth: exampleBirth }, example: true },
+    ziwei: { result: { module: "ziwei", chart: buildZiwei(exampleBirth, year) }, input: { module: "ziwei", birth: exampleBirth, viewYear: year }, example: true },
     iching: { result: { module: "iching", chart: buildCast(exampleCast) }, input: { module: "iching", cast: exampleCast }, example: true },
   };
   return { specimens, year, timeZones: Intl.supportedValuesOf("timeZone") };
